@@ -10,6 +10,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Filament\Actions\Action;
 
 class AutorizacaoResource extends Resource
 {
@@ -64,7 +65,7 @@ class AutorizacaoResource extends Resource
             ])
            ->actions([
                 // CORRIGIDO: Chamando a Action a partir do Tables\ que já está importado com segurança no topo
-                Tables\Actions\Action::make('validarSaida')
+                Action::make('validarSaida') // <-- Mais limpo e direto
                     ->label('Validar Saída')
                     ->color('success')
                     ->icon('heroicon-o-check-circle')
