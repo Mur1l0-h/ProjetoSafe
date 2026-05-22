@@ -13,16 +13,24 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('autorizacoes', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('estudantes_id')->constrained();
-            $table->enum('type', ['entrada', 'saida']);
-            $table->enum('status', ['pendente', 'concluida'])->default('pendente');
-            $table->integer('absences_to_apply')->default(0);
-            $table->foreignId('created_by')->constrained('users')->comment('Coordenador');
-            $table->foreignId('validated_by')->nullable()->constrained('users')->comment('Porteiro');
-            $table->timestamp('validated_at')->nullable();
-            $table->timestamps();
-        });
+    $table->id();
+    
+    // Substituímos o student_id por campos de texto e tempo diretos:
+    $table->string('student_name')->comment('Nome do Aluno');
+    $table->string('turma')->comment('Turma do Aluno');
+    $table->time('horario')->comment('Horário da ocorrência');
+    // Na sua migration de autorizações, adicione:
+    $table->string('professor_name')->comment('Nome do Professor da aula');
+    
+    $table->enum('type', ['entrada', 'saida']);
+    $table->enum('status', ['pendente', 'concluida'])->default('pendente');
+    $table->integer('absences_to_apply')->default(0);
+    
+    $table->foreignId('created_by')->constrained('users')->comment('Coordenador');
+    $table->foreignId('validated_by')->nullable()->constrained('users')->comment('Porteiro');
+    $table->timestamp('validated_at')->nullable();
+    $table->timestamps();
+});
     }
 
     /**

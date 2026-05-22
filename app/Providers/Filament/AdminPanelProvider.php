@@ -19,6 +19,8 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Support\Facades\Blade;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -29,6 +31,15 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->renderHook(
+                PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
+                fn (): string => Blade::render('
+                    <div class="text-center text-sm mt-6">
+                        <span class="text-gray-500 dark:text-gray-400">Não tem uma conta?</span> 
+                        <a href="/register" class="font-semibold text-amber-600 hover:text-amber-500 transition">Cadastre-se aqui</a>
+                    </div>
+                ')
+            )
             ->colors([
                 'primary' => Color::Amber,
             ])

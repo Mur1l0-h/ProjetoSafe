@@ -20,55 +20,114 @@ class AutorizacaoResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'Autorizacao';
 
+ // 1. FORMULÁRIO CORRIGIDO (Removendo os segundos do seletor de vez)
     public static function form(Schema $schema): Schema
     {
         return $schema->components([ 
-            // CORRIGIDO: Agora usa 'student_id' para bater exatamente com a sua migration!
-            Forms\Components\Select::make('student_id')
-                ->relationship('student', 'name') 
-                ->searchable()
+            Forms\Components\TextInput::make('student_name')
+                ->label('Nome do Aluno')
+                ->placeholder('Digite o nome completo')
+                ->required(),
+
+            Forms\Components\TextInput::make('turma')
+                ->label('Turma')
+                ->placeholder('Ex: 1º Ano A, 2º Ano B')
+                ->required(),
+
+            Forms\Components\TextInput::make('professor_name')
+                ->label('Professor(a)')
+                ->placeholder('Nome do professor responsável')
+                ->default(fn () => auth()->user()->hasRole('professor') ? auth()->user()->name : null)
+                ->required(),
+
+            Forms\Components\DatePicker::make('data')
+                ->label('Data')
+                ->default(now())
+                ->displayFormat('d/m/Y')
+                ->required(),
+
+            // CORRIGIDO: ->seconds(false) remove a coluna de segundos do relógio
+            Forms\Components\TimePicker::make('horario')
+                ->label('Horário')
+                ->seconds(false) 
+                ->displayFormat('H:i')
                 ->required(),
             
             Forms\Components\Select::make('type')
-                ->options(['entrada' => 'Entrada', 'saida' => 'Saída'])
+                ->label('Tipo de Autorização')
+                ->options([
+                    'entrada' => 'Entrada',
+                    'saida' => 'Saída',
+                ])
                 ->required(),
             
             Forms\Components\TextInput::make('absences_to_apply')
                 ->numeric()
-                ->label('Faltas a aplicar'),
+                ->label('Faltas a aplicar')
+                ->default(0),
             
             Forms\Components\Hidden::make('created_by')
                 ->default(auth()->id()),
         ]);
     }
 
+    // 2. TABELA DE EXIBIÇÃO MANTENDO TODOS OS CAMPOS E FORMATO LIMPO
     public static function table(Table $table): Table
     {
         return $table 
             ->columns([
+                Tables\Columns\TextColumn::make('student_name')
+                    ->label('Aluno')
+                    ->searchable()
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('turma')
+                    ->label('Turma')
+                    ->searchable(),
+
+                Tables\Columns\TextColumn::make('professor_name')
+                    ->label('Professor(a)')
+                    ->searchable()
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('data')
+                    ->label('Data')
+                    ->date('d/m/Y')
+                    ->sortable(),
+
+                // CORRIGIDO: Força a exibição na listagem estritamente como Hora:Minuto
+                Tables\Columns\TextColumn::make('horario')
+                    ->label('Horário')
+                    ->time('H:i'),
+
+                Tables\Columns\TextColumn::make('absences_to_apply')
+                    ->label('Faltas')
+                    ->numeric()
+                    ->alignCenter()
+                    ->badge()
+                    ->color(fn ($state) => $state > 0 ? 'danger' : 'gray'),
+
                 Tables\Columns\TextColumn::make('type')
-                    ->label('Tipo de Liberação')
+                    ->label('Tipo')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
-                        'entrada' => 'info',
+                        'entrada' => 'success',
                         'saida' => 'warning',
                     }),
+
                 Tables\Columns\TextColumn::make('status')
+                    ->label('Status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
-                        'pendente' => 'warning',
+                        'pendente' => 'danger',
                         'concluida' => 'success',
                     }),
-                Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime('d/m/Y H:i')
-                    ->label('Criada em'),
             ])
-           ->actions([
-                // CORRIGIDO: Chamando a Action a partir do Tables\ que já está importado com segurança no topo
-                Action::make('validarSaida') // <-- Mais limpo e direto
+            ->actions([
+                Action::make('validarSaida')
                     ->label('Validar Saída')
-                    ->color('success')
                     ->icon('heroicon-o-check-circle')
+                    ->color('success')
                     ->visible(fn ($record) => $record->type === 'saida' && $record->status === 'pendente' && auth()->user()->hasRole('portaria'))
                     ->action(function ($record) {
                         $record->update([
@@ -79,7 +138,6 @@ class AutorizacaoResource extends Resource
                     })
             ]);
     }
-
     public static function getRelations(): array
     {
         return [];
@@ -87,7 +145,6 @@ class AutorizacaoResource extends Resource
 
     public static function getPages(): array
     {
-        // CORRIGIDO: Caminho padronizado das páginas
         return [
             'index' => Pages\ListAutorizacaos::route('/'),
             'create' => Pages\CreateAutorizacao::route('/create'),
@@ -95,20 +152,30 @@ class AutorizacaoResource extends Resource
         ];
     }
 
-    public static function getEloquentQuery(): Builder
+   
+ public static function getEloquentQuery(): Builder
+{
+    $query = parent::getEloquentQuery();
+    $user = auth()->user();
+
+    // Filtra para o professor ver apenas as autorizações com o nome dele
+    if ($user->hasRole('professor')) {
+        return $query->where('professor_name', $user->name);
+    }
+
+    return $query;
+}
+
+
+    // Quem pode criar novos registros?
+    public static function canCreate(): bool
     {
-        $user = auth()->user();
-        $query = parent::getEloquentQuery();
+        return auth()->user()->hasRole('coordenador');
+    }
 
-        if ($user->hasRole('professor')) {
-            return $query->whereHas('student.schoolClass.schedules', function ($q) use ($user) {
-                $q->where('user_id', $user->id)
-                  ->where('day_of_week', now()->dayOfWeek) 
-                  ->whereTime('start_time', '<=', now())   
-                  ->whereTime('end_time', '>=', now());    
-            });
-        }
-
-        return $query; 
+    // Quem pode editar registros existentes?
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return auth()->user()->hasRole('coordenador');
     }
 }
